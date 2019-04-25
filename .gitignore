@@ -1,0 +1,9 @@
+*.pyc
+config.json
+logs
+.coverage
+build
+*.xml
+*.egg*
+dist
+htmlcov
