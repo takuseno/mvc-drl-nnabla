@@ -1,5 +1,5 @@
 # mvc-dr-nnabla
-NNabla implementation with [mvc-drl](https://github.com/takuseno/mvc-drl).
+[NNabla](https://nnabla.org) implementation with [mvc-drl](https://github.com/takuseno/mvc-drl).
 
 ## installation
 ### nvidia-docker
