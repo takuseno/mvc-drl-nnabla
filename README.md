@@ -1,5 +1,7 @@
-# mvc-dr-nnabla
+# mvc-drl-nnabla
 [NNabla](https://nnabla.org) implementation with [mvc-drl](https://github.com/takuseno/mvc-drl).
+
+Algorithms implemented in this repository are faster than the original TensorFlow version.
 
 ## installation
 ### nvidia-docker
@@ -24,4 +26,5 @@ For academic usage, we provide baseline implementations that you might need to c
 - [x] Deep Deterministic Policy Gradients
 - [ ] Soft Actor-Critic
 
-
+## speed comparison
+TODO.
