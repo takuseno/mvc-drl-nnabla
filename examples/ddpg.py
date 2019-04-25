@@ -1,10 +1,12 @@
 import numpy as np
+import nnabla as nn
 import argparse
 import gym
 import pybullet_envs
 import roboschool
 
 
+from nnabla.ext_utils import get_extension_context
 from mvc.envs.wrappers import MuJoCoWrapper
 from mvc.controllers.ddpg import DDPGController
 from mvc.controllers.eval import EvalController
@@ -18,6 +20,10 @@ from mvc_nnabla.models.networks.ddpg import DDPGNetwork, DDPGNetworkParams
 
 
 def main(args):
+    if args.gpu is not None:
+        ctx = get_extension_context('cudnn', device_id=str(args.gpu))
+        nn.set_default_context(ctx)
+
     # environment
     env = MuJoCoWrapper(gym.make(args.env), args.reward_scale, args.render)
     env.seed(args.seed)
@@ -105,5 +111,6 @@ if __name__ == '__main__':
                         help='show rendered frames')
     parser.add_argument('--seed', type=int, default=0,
                         help='Random seed of environment')
+    parser.add_argument('--gpu', type=int, help='GPU device id')
     args = parser.parse_args()
     main(args)
