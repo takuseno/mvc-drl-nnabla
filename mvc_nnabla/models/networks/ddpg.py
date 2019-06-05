@@ -40,19 +40,15 @@ def build_critic_loss(q_t, rewards_tp1, q_tp1, dones_tp1, gamma):
 
 
 def build_target_update(src, dst, tau):
-    with nn.parameter_scope(src):
-        src_vars = nn.get_parameters()
-    with nn.parameter_scope(dst):
-        dst_vars = nn.get_parameters()
-    for src_var, dst_var in zip(src_vars.values(), dst_vars.values()):
-        dst_var.d = dst_var.d * (1.0 - tau) + src_var.d * tau
+    exprs = []
+    for src_var, dst_var in zip(src.values(), dst.values()):
+        exprs.append(F.assign(dst_var, dst_var * (1.0 - tau) + src_var * tau))
+    return F.sink(*exprs)
 
 
-def build_optim(loss, learning_rate, scope):
+def build_optim(loss, learning_rate, params):
     optimizer = S.Adam(learning_rate, eps=1e-8)
-    with nn.parameter_scope(scope):
-        parameters = nn.get_parameters()
-    optimizer.set_parameters(parameters)
+    optimizer.set_parameters(params)
     return optimizer
 
 
@@ -70,8 +66,8 @@ class DDPGNetwork(BaseNetwork):
     def _infer(self, **kwargs):
         self.infer_obs_t.d = np.array([kwargs['obs_t']])
         self.infer_sink.forward(clear_buffer=True)
-        action = self.action.d.copy()[0]
-        value = self.value.d.copy()[0]
+        action = self.infer_policy_t.d.copy()[0]
+        value = self.infer_q_t.d.copy()[0][0]
         return ActionOutput(action=action, log_prob=None, value=value)
 
     def _update(self, **kwargs):
@@ -85,6 +81,7 @@ class DDPGNetwork(BaseNetwork):
         self.critic_solver.zero_grad()
         self.critic_loss.backward(clear_buffer=True)
         self.critic_solver.update()
+        critic_loss = self.critic_loss.d.copy()
 
         # actor update
         self.obs_t.d = kwargs['obs_t']
@@ -92,12 +89,12 @@ class DDPGNetwork(BaseNetwork):
         self.actor_solver.zero_grad()
         self.actor_loss.backward(clear_buffer=True)
         self.actor_solver.update()
+        actor_loss = self.actor_loss.d.copy()
 
         # target update
-        build_target_update('ddpg/critic', 'ddpg/target_critic', self.params.tau)
-        build_target_update('ddpg/actor', 'ddpg/target_actor',self. params.tau)
+        self.update_target.forward(clear_buffer=True)
 
-        return self.critic_loss.d.copy(), self.actor_loss.d.copy()
+        return critic_loss, actor_loss
 
     def _build(self, params):
         with nn.parameter_scope('ddpg'):
@@ -109,15 +106,15 @@ class DDPGNetwork(BaseNetwork):
                 params.fcs, self.infer_obs_t, params.num_actions, F.tanh,
                 w_init=Initializer(), last_w_init=last_initializer,
                 last_b_init=last_initializer, scope='actor')
-            infer_policy_t = F.tanh(infer_raw_policy_t)
+            self.infer_policy_t = F.tanh(infer_raw_policy_t)
 
-            infer_q_t = q_function(
-                params.fcs, self.infer_obs_t, infer_policy_t,
+            self.infer_q_t = q_function(
+                params.fcs, self.infer_obs_t, self.infer_policy_t,
                 params.concat_index, F.tanh, w_init=Initializer(),
                 last_w_init=last_initializer, last_b_init=last_initializer,
                 scope='critic')
 
-            self.infer_sink = F.sink(infer_policy_t, infer_q_t)
+            self.infer_sink = F.sink(self.infer_policy_t, self.infer_q_t)
 
             # training
             self.obs_t = nn.Variable((params.batch_size,) + params.state_shape)
@@ -161,15 +158,30 @@ class DDPGNetwork(BaseNetwork):
             # actor loss
             self.actor_loss = -F.mean(q_t_with_actor)
 
+            # parameters
+            with nn.parameter_scope('actor'):
+                actor_params = nn.get_parameters()
+            with nn.parameter_scope('target_actor'):
+                target_actor_params = nn.get_parameters()
+            with nn.parameter_scope('critic'):
+                critic_params = nn.get_parameters()
+            with nn.parameter_scope('target_critic'):
+                target_critic_params = nn.get_parameters()
+
             # optimization
             self.critic_solver = build_optim(
-                self.critic_loss, params.critic_lr, 'ddpg/critic')
+                self.critic_loss, params.critic_lr, critic_params)
             self.actor_solver = build_optim(
-                self.actor_loss, params.actor_lr, 'ddpg/actor')
+                self.actor_loss, params.actor_lr, actor_params)
 
-            # action
-            self.action = infer_policy_t
-            self.value = F.reshape(infer_q_t, (-1,), inplace=False)
+            # target update
+            update_actor_target = build_target_update(
+                target_actor_params, actor_params, params.tau)
+            update_critic_target = build_target_update(
+                target_critic_params, critic_params, params.tau)
+            self.update_target = F.sink(
+                update_actor_target, update_critic_target)
+
 
     def _infer_arguments(self):
         return ['obs_t']
