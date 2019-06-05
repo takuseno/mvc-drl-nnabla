@@ -46,7 +46,7 @@ def main(args):
     buffer = Buffer(args.buffer_size)
 
     # metrics
-    metrics = Metrics(args.name, args.log_adapter)
+    metrics = Metrics(args.name)
 
     # exploration noise
     noise = OrnsteinUhlenbeckActionNoise(
@@ -104,8 +104,6 @@ if __name__ == '__main__':
                         help='the number of evaluation episode')
     parser.add_argument('--name', type=str, default='ddpg',
                         help='name of experiment')
-    parser.add_argument('--log-adapter', type=str, default='visdom',
-                        help='(visdom, tfboard)')
     parser.add_argument('--load', type=str, help='path to model file')
     parser.add_argument('--render', action='store_true',
                         help='show rendered frames')
