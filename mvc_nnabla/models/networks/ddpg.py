@@ -176,9 +176,9 @@ class DDPGNetwork(BaseNetwork):
 
             # target update
             update_actor_target = build_target_update(
-                target_actor_params, actor_params, params.tau)
+                actor_params, target_actor_params, params.tau)
             update_critic_target = build_target_update(
-                target_critic_params, critic_params, params.tau)
+                critic_params, target_critic_params, params.tau)
             self.update_target = F.sink(
                 update_actor_target, update_critic_target)
 
